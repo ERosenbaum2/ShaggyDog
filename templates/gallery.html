@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}My Gallery - Shaggy Dog{% endblock %}
+
+{% block content %}
+<div class="gallery-container">
+    <div class="upload-section">
+        <h2>Transform Your Headshot</h2>
+        <p>Upload a human headshot to see your dog transformation!</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+            <div class="upload-prompt">
+                <span class="upload-icon">📷</span>
+                <p>Click to upload or drag and drop</p>
+                <small>PNG, JPG, JPEG, GIF, WEBP (Max 5MB)</small>
+            </div>
+        </div>
+        
+        <div id="progressContainer" class="progress-container" style="display: none;">
+            <div class="progress-bar">
+                <div id="progressBar" class="progress-fill"></div>
+            </div>
+            <p id="progressText">Processing your image...</p>
+        </div>
+    </div>
+
+    <div class="generations-section">
+        <h2>My Transformations</h2>
+        {% if generations %}
+        <div class="generations-grid" id="generationsGrid">
+            {% for gen in generations %}
+            <div class="generation-card" data-generation-id="{{ gen.id }}">
+                <div class="generation-header">
+                    <h3>Transformation #{{ gen.id }}</h3>
+                    <span class="breed-badge">{{ gen.detected_breed or 'Unknown Breed' }}</span>
+                </div>
+                <div class="image-sequence">
+                    <div class="image-item">
+                        <label>Original</label>
+                        <img src="{{ url_for('get_image', generation_id=gen.id, image_type='original') }}" 
+                             alt="Original" loading="lazy">
+                    </div>
+                    <div class="arrow">→</div>
+                    <div class="image-item">
+                        <label>Transition 1</label>
+                        <img src="{{ url_for('get_image', generation_id=gen.id, image_type='transition1') }}" 
+                             alt="Transition 1" loading="lazy">
+                    </div>
+                    <div class="arrow">→</div>
+                    <div class="image-item">
+                        <label>Transition 2</label>
+                        <img src="{{ url_for('get_image', generation_id=gen.id, image_type='transition2') }}" 
+                             alt="Transition 2" loading="lazy">
+                    </div>
+                    <div class="arrow">→</div>
+                    <div class="image-item">
+                        <label>Final</label>
+                        <img src="{{ url_for('get_image', generation_id=gen.id, image_type='final') }}" 
+                             alt="Final Dog" loading="lazy">
+                    </div>
+                </div>
+                <div class="generation-footer">
+                    <small>{{ gen.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No transformations yet. Upload your first headshot to get started!</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
