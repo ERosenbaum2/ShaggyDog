@@ -5,7 +5,7 @@
 {% block content %}
 <div class="auth-container">
     <div class="auth-card">
-        <h2>Register</h2>
+        <h1>Register</h1>
         <form method="POST" action="{{ url_for('register') }}">
             <div class="form-group">
                 <label for="username">Username</label>
@@ -14,7 +14,11 @@
             <div class="form-group">
                 <label for="password">Password</label>
                 <input type="password" id="password" name="password" required minlength="6">
-                <small>Minimum 6 characters</small>
+                <small>Must be at least 6 characters</small>
+            </div>
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required minlength="6">
             </div>
             <button type="submit" class="btn btn-primary">Register</button>
         </form>

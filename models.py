@@ -4,7 +4,6 @@ from datetime import datetime
 db = SQLAlchemy()
 
 class User(db.Model):
-    """User model for authentication"""
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -12,33 +11,23 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Relationship to generations
-    generations = db.relationship('Generation', backref='user', lazy=True, cascade='all, delete-orphan')
+    # Relationship to images
+    images = db.relationship('Image', backref='user', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<User {self.username}>'
 
-class Generation(db.Model):
-    """Image generation model"""
-    __tablename__ = 'generations'
+class Image(db.Model):
+    __tablename__ = 'images'
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
-    
-    # Images stored as base64-encoded strings
-    original_image = db.Column(db.Text, nullable=False)
-    transition_image_1 = db.Column(db.Text, nullable=False)
-    transition_image_2 = db.Column(db.Text, nullable=False)
-    final_dog_image = db.Column(db.Text, nullable=False)
-    
-    # Metadata
-    detected_breed = db.Column(db.String(100), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    original_image = db.Column(db.LargeBinary, nullable=False)
+    transition1 = db.Column(db.LargeBinary, nullable=False)
+    transition2 = db.Column(db.LargeBinary, nullable=False)
+    final_dog = db.Column(db.LargeBinary, nullable=False)
+    breed = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def __repr__(self):
-        return f'<Generation {self.id} by User {self.user_id}>'
-
-def init_db(app):
-    """Initialize database tables"""
-    with app.app_context():
-        db.create_all()
+        return f'<Image {self.id} - {self.breed}>'

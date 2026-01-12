@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Upload - Shaggy Dog{% endblock %}
+
+{% block content %}
+<div class="upload-container">
+    <h1>Upload Your Headshot</h1>
+    <p class="subtitle">Upload a photo of yourself and we'll transform you into your canine counterpart!</p>
+    
+    <div class="upload-card">
+        <form id="uploadForm" method="POST" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="image" class="file-label">
+                    <span class="file-button">Choose Image</span>
+                    <span class="file-name" id="fileName">No file selected</span>
+                </label>
+                <input type="file" id="image" name="image" accept="image/*" required style="display: none;">
+            </div>
+            
+            <div id="imagePreview" class="image-preview" style="display: none;">
+                <img id="previewImg" src="" alt="Preview">
+            </div>
+            
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+                Transform Me!
+            </button>
+        </form>
+        
+        <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+            <div class="spinner"></div>
+            <p>Generating your transformation... This may take a minute.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('image').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            document.getElementById('fileName').textContent = file.name;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('imagePreview');
+                const previewImg = document.getElementById('previewImg');
+                previewImg.src = e.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+        const submitBtn = document.getElementById('submitBtn');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        submitBtn.disabled = true;
+        submitBtn.style.display = 'none';
+        loadingIndicator.style.display = 'block';
+    });
+</script>
+{% endblock %}

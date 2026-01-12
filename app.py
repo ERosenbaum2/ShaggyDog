@@ -1,216 +1,218 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from werkzeug.utils import secure_filename
-import os
-import base64
-from io import BytesIO
-
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from config import Config
-from models import db, User, Generation, init_db
-from auth import UserLogin, register_user, authenticate_user
-from image_processor import (
-    encode_image_to_base64, 
-    detect_dog_breed, 
-    generate_transition_images
-)
+from models import db, User, Image
+from auth import register_user, verify_user, login_required, get_current_user
+from openai_service import detect_breed, generate_transition_image, generate_final_dog_image
+import os
+from io import BytesIO
+from datetime import datetime
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Initialize extensions
+# Set preferred URL scheme for URL generation (for HTTPS in production)
+# This helps Flask generate correct URLs when behind a reverse proxy
+if app.config.get('PREFERRED_URL_SCHEME') == 'https':
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+# Initialize database
 db.init_app(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-login_manager.login_message = 'Please log in to access this page.'
 
-@login_manager.user_loader
-def load_user(user_id):
-    user = User.query.get(int(user_id))
-    if user:
-        return UserLogin(user)
-    return None
+# Create upload directory if it doesn't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-def allowed_file(filename):
-    """Check if file extension is allowed"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
+# Create database tables
+with app.app_context():
+    db.create_all()
 
 @app.route('/')
 def index():
-    """Main page - redirects to login if not authenticated, otherwise shows upload/gallery"""
-    if current_user.is_authenticated:
+    """Home page - redirect to login or gallery."""
+    if 'user_id' in session:
         return redirect(url_for('gallery'))
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """User registration"""
+    """User registration."""
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
         
+        # Validation
         if not username or not password:
-            flash('Username and password are required', 'error')
+            flash('Username and password are required.', 'error')
+            return render_template('register.html')
+        
+        if password != confirm_password:
+            flash('Passwords do not match.', 'error')
             return render_template('register.html')
         
         if len(password) < 6:
-            flash('Password must be at least 6 characters', 'error')
+            flash('Password must be at least 6 characters long.', 'error')
             return render_template('register.html')
         
+        # Register user
         user, error = register_user(username, password)
-        if user:
-            flash('Registration successful! Please log in.', 'success')
-            return redirect(url_for('login'))
-        else:
-            flash(error or 'Registration failed', 'error')
+        if error:
+            flash(error, 'error')
+            return render_template('register.html')
+        
+        # Auto-login after registration
+        session['user_id'] = user.id
+        session['username'] = user.username
+        flash('Registration successful! Welcome!', 'success')
+        return redirect(url_for('gallery'))
     
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """User login"""
-    if current_user.is_authenticated:
-        return redirect(url_for('gallery'))
-    
+    """User login."""
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         
-        user = authenticate_user(username, password)
+        if not username or not password:
+            flash('Please enter both username and password.', 'error')
+            return render_template('login.html')
+        
+        user = verify_user(username, password)
         if user:
-            login_user(UserLogin(user))
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('gallery'))
+            session['user_id'] = user.id
+            session['username'] = user.username
+            flash('Login successful!', 'success')
+            return redirect(url_for('gallery'))
         else:
-            flash('Invalid username or password', 'error')
+            flash('Invalid username or password.', 'error')
+            return render_template('login.html')
     
     return render_template('login.html')
 
 @app.route('/logout')
-@login_required
 def logout():
-    """User logout"""
-    logout_user()
-    flash('You have been logged out', 'info')
+    """User logout."""
+    session.clear()
+    flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
-@app.route('/gallery')
+@app.route('/upload', methods=['GET'])
 @login_required
-def gallery():
-    """Display user's generated images"""
-    generations = Generation.query.filter_by(user_id=current_user.user.id)\
-                                  .order_by(Generation.created_at.desc())\
-                                  .all()
-    return render_template('gallery.html', generations=generations)
+def upload_page():
+    """Image upload page."""
+    return render_template('upload.html')
 
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload():
-    """Handle image upload and generation"""
+    """Process image upload and generate transformations."""
     if 'image' not in request.files:
-        return jsonify({'error': 'No image file provided'}), 400
+        flash('No image file provided.', 'error')
+        return redirect(url_for('upload_page'))
     
     file = request.files['image']
-    
     if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
+        flash('No image file selected.', 'error')
+        return redirect(url_for('upload_page'))
     
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'}), 400
-    
-    # Check file size
-    file.seek(0, os.SEEK_END)
-    file_size = file.tell()
-    file.seek(0)
-    
-    if file_size > Config.MAX_UPLOAD_SIZE:
-        return jsonify({'error': f'File too large. Maximum size: {Config.MAX_UPLOAD_SIZE / (1024*1024):.1f}MB'}), 400
+    # Validate file type
+    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+    if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+        flash('Invalid file type. Please upload an image (PNG, JPG, JPEG, GIF, or WEBP).', 'error')
+        return redirect(url_for('upload_page'))
     
     try:
-        # Encode image to base64
-        original_image_base64 = encode_image_to_base64(file)
+        # Read image data
+        image_data = file.read()
         
-        # Detect dog breed
-        breed = detect_dog_breed(original_image_base64)
+        # Detect breed
+        file.seek(0)  # Reset file pointer
+        breed, reasoning = detect_breed(file)
+        
+        if not breed:
+            flash(f'Error detecting breed: {reasoning}', 'error')
+            return redirect(url_for('upload_page'))
         
         # Generate transition images
-        transition_1, transition_2, final_dog = generate_transition_images(
-            original_image_base64, 
-            breed, 
-            Config.TRANSITION_COUNT
-        )
+        flash('Generating images... This may take a minute.', 'info')
+        
+        transition1_data = generate_transition_image(image_data, breed, 1)
+        transition2_data = generate_transition_image(image_data, breed, 2)
+        final_dog_data = generate_final_dog_image(image_data, breed)
+        
+        if not all([transition1_data, transition2_data, final_dog_data]):
+            flash('Error generating images. Please try again.', 'error')
+            return redirect(url_for('upload_page'))
         
         # Save to database
-        generation = Generation(
-            user_id=current_user.user.id,
-            original_image=original_image_base64,
-            transition_image_1=transition_1,
-            transition_image_2=transition_2,
-            final_dog_image=final_dog,
-            detected_breed=breed
+        user_id = session['user_id']
+        image_record = Image(
+            user_id=user_id,
+            original_image=image_data,
+            transition1=transition1_data,
+            transition2=transition2_data,
+            final_dog=final_dog_data,
+            breed=breed
         )
         
-        db.session.add(generation)
+        db.session.add(image_record)
         db.session.commit()
         
-        return jsonify({
-            'success': True,
-            'generation_id': generation.id,
-            'breed': breed
-        })
+        flash(f'Successfully generated {breed} transformation!', 'success')
+        return redirect(url_for('gallery'))
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Error processing image: {str(e)}'}), 500
+        flash(f'Error processing image: {str(e)}', 'error')
+        return redirect(url_for('upload_page'))
 
-@app.route('/api/images/<int:generation_id>/<image_type>')
+@app.route('/gallery')
 @login_required
-def get_image(generation_id, image_type):
-    """Serve image from database"""
-    generation = Generation.query.get_or_404(generation_id)
+def gallery():
+    """User's image gallery."""
+    user_id = session['user_id']
+    images = Image.query.filter_by(user_id=user_id).order_by(Image.created_at.desc()).all()
+    return render_template('gallery.html', images=images)
+
+@app.route('/image/<int:image_id>/<image_type>')
+@login_required
+def serve_image(image_id, image_type):
+    """Serve an image from the database (user-specific)."""
+    user_id = session['user_id']
+    image_record = Image.query.filter_by(id=image_id, user_id=user_id).first_or_404()
     
-    # Verify user owns this generation
-    if generation.user_id != current_user.user.id:
-        return jsonify({'error': 'Unauthorized'}), 403
+    # Determine which image to serve
+    image_data = None
+    mimetype = 'image/jpeg'
     
-    # Get the requested image
-    image_map = {
-        'original': generation.original_image,
-        'transition1': generation.transition_image_1,
-        'transition2': generation.transition_image_2,
-        'final': generation.final_dog_image
-    }
-    
-    if image_type not in image_map:
-        return jsonify({'error': 'Invalid image type'}), 400
-    
-    image_base64 = image_map[image_type]
-    image_data = base64.b64decode(image_base64)
+    if image_type == 'original':
+        image_data = image_record.original_image
+    elif image_type == 'transition1':
+        image_data = image_record.transition1
+    elif image_type == 'transition2':
+        image_data = image_record.transition2
+    elif image_type == 'final':
+        image_data = image_record.final_dog
+    else:
+        flash('Invalid image type.', 'error')
+        return redirect(url_for('gallery'))
     
     return send_file(
         BytesIO(image_data),
-        mimetype='image/jpeg',
+        mimetype=mimetype,
         as_attachment=False
     )
 
-@app.route('/api/generations')
-@login_required
-def get_generations():
-    """Get all generations for current user"""
-    generations = Generation.query.filter_by(user_id=current_user.user.id)\
-                                  .order_by(Generation.created_at.desc())\
-                                  .all()
-    
-    return jsonify([{
-        'id': g.id,
-        'breed': g.detected_breed,
-        'created_at': g.created_at.isoformat()
-    } for g in generations])
-
-# Initialize database on startup
-with app.app_context():
-    init_db(app)
-
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Configure for production or development
+    debug_mode = app.config.get('DEBUG', False)
+    port = int(os.getenv('PORT', 5000))
+    
+    # If SERVER_NAME is set, use it (for production with domain)
+    if app.config.get('SERVER_NAME'):
+        app.run(debug=debug_mode, host='0.0.0.0', port=port)
+    else:
+        # Development mode - localhost
+        app.run(debug=debug_mode, host='0.0.0.0', port=port)

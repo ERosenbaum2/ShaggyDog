@@ -1,76 +1,93 @@
 {% extends "base.html" %}
 
-{% block title %}My Gallery - Shaggy Dog{% endblock %}
+{% block title %}Gallery - Shaggy Dog{% endblock %}
 
 {% block content %}
 <div class="gallery-container">
-    <div class="upload-section">
-        <h2>Transform Your Headshot</h2>
-        <p>Upload a human headshot to see your dog transformation!</p>
-        
-        <div class="upload-area" id="uploadArea">
-            <input type="file" id="imageInput" accept="image/*" style="display: none;">
-            <div class="upload-prompt">
-                <span class="upload-icon">📷</span>
-                <p>Click to upload or drag and drop</p>
-                <small>PNG, JPG, JPEG, GIF, WEBP (Max 5MB)</small>
-            </div>
-        </div>
-        
-        <div id="progressContainer" class="progress-container" style="display: none;">
-            <div class="progress-bar">
-                <div id="progressBar" class="progress-fill"></div>
-            </div>
-            <p id="progressText">Processing your image...</p>
-        </div>
+    <div class="gallery-header">
+        <h1>Your Transformations</h1>
+        <a href="{{ url_for('upload_page') }}" class="btn btn-primary">Upload New Image</a>
     </div>
-
-    <div class="generations-section">
-        <h2>My Transformations</h2>
-        {% if generations %}
-        <div class="generations-grid" id="generationsGrid">
-            {% for gen in generations %}
-            <div class="generation-card" data-generation-id="{{ gen.id }}">
-                <div class="generation-header">
-                    <h3>Transformation #{{ gen.id }}</h3>
-                    <span class="breed-badge">{{ gen.detected_breed or 'Unknown Breed' }}</span>
+    
+    {% if images %}
+        <div class="gallery-grid">
+            {% for image in images %}
+            <div class="gallery-item">
+                <div class="gallery-item-header">
+                    <h3>{{ image.breed }}</h3>
+                    <span class="gallery-date">{{ image.created_at.strftime('%B %d, %Y') }}</span>
                 </div>
-                <div class="image-sequence">
-                    <div class="image-item">
-                        <label>Original</label>
-                        <img src="{{ url_for('get_image', generation_id=gen.id, image_type='original') }}" 
-                             alt="Original" loading="lazy">
+                <div class="transformation-sequence" data-image-id="{{ image.id }}">
+                    <div class="sequence-item">
+                        <h4>Original</h4>
+                        <img src="{{ url_for('serve_image', image_id=image.id, image_type='original') }}" 
+                             alt="Original" class="transformation-image" loading="lazy">
                     </div>
-                    <div class="arrow">→</div>
-                    <div class="image-item">
-                        <label>Transition 1</label>
-                        <img src="{{ url_for('get_image', generation_id=gen.id, image_type='transition1') }}" 
-                             alt="Transition 1" loading="lazy">
+                    <div class="sequence-item">
+                        <h4>Transition 1</h4>
+                        <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition1') }}" 
+                             alt="Transition 1" class="transformation-image" loading="lazy">
                     </div>
-                    <div class="arrow">→</div>
-                    <div class="image-item">
-                        <label>Transition 2</label>
-                        <img src="{{ url_for('get_image', generation_id=gen.id, image_type='transition2') }}" 
-                             alt="Transition 2" loading="lazy">
+                    <div class="sequence-item">
+                        <h4>Transition 2</h4>
+                        <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition2') }}" 
+                             alt="Transition 2" class="transformation-image" loading="lazy">
                     </div>
-                    <div class="arrow">→</div>
-                    <div class="image-item">
-                        <label>Final</label>
-                        <img src="{{ url_for('get_image', generation_id=gen.id, image_type='final') }}" 
-                             alt="Final Dog" loading="lazy">
+                    <div class="sequence-item">
+                        <h4>Final</h4>
+                        <img src="{{ url_for('serve_image', image_id=image.id, image_type='final') }}" 
+                             alt="Final" class="transformation-image" loading="lazy">
                     </div>
-                </div>
-                <div class="generation-footer">
-                    <small>{{ gen.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
                 </div>
             </div>
             {% endfor %}
         </div>
-        {% else %}
-        <div class="empty-state">
+    {% else %}
+        <div class="empty-gallery">
             <p>No transformations yet. Upload your first headshot to get started!</p>
+            <a href="{{ url_for('upload_page') }}" class="btn btn-primary">Upload Image</a>
         </div>
-        {% endif %}
-    </div>
+    {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Use Web Workers to load images in parallel for better performance
+    if (window.Worker) {
+        const images = document.querySelectorAll('.transformation-image');
+        const workerUrl = '{{ url_for("static", filename="js/worker.js") }}';
+        
+        images.forEach((img, index) => {
+            const worker = new Worker(workerUrl);
+            const originalSrc = img.src;
+            
+            worker.postMessage({
+                type: 'loadImage',
+                src: originalSrc,
+                index: index
+            });
+            
+            worker.onmessage = function(e) {
+                if (e.data.type === 'imageLoaded') {
+                    // Update image source with the loaded blob URL
+                    img.src = e.data.src;
+                    img.style.opacity = '0';
+                    img.onload = function() {
+                        img.style.transition = 'opacity 0.3s';
+                        img.style.opacity = '1';
+                    };
+                    worker.terminate(); // Clean up worker after use
+                } else if (e.data.type === 'imageError') {
+                    // Fallback to original src if worker fails
+                    console.error('Worker error:', e.data.error);
+                    worker.terminate();
+                }
+            };
+        });
+    } else {
+        // Fallback for browsers without Web Worker support
+        console.log('Web Workers not supported, using standard image loading');
+    }
+</script>
 {% endblock %}
