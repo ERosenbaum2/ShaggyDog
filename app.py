@@ -5,6 +5,7 @@ from auth import register_user, verify_user, login_required, get_current_user
 from openai_service import detect_breed, generate_transition_image, generate_final_dog_image
 import os
 import logging
+import threading
 from io import BytesIO
 from datetime import datetime
 
@@ -202,42 +203,73 @@ def upload():
             flash(f'Error detecting breed: {reasoning}', 'error')
             return redirect(url_for('upload_page'))
         
-        # Generate transition images
-        logger.info("Starting image generation process")
-        flash('Generating images... This may take a minute.', 'info')
-        
-        logger.info("Generating transition image 1")
-        transition1_data = generate_transition_image(image_data, breed, 1)
-        logger.info(f"Transition image 1 {'completed' if transition1_data else 'failed'}")
-        
-        logger.info("Generating transition image 2")
-        transition2_data = generate_transition_image(image_data, breed, 2)
-        logger.info(f"Transition image 2 {'completed' if transition2_data else 'failed'}")
-        
-        logger.info("Generating final dog image")
-        final_dog_data = generate_final_dog_image(image_data, breed)
-        logger.info(f"Final dog image {'completed' if final_dog_data else 'failed'}")
-        
-        if not all([transition1_data, transition2_data, final_dog_data]):
-            flash('Error generating images. Please try again.', 'error')
-            return redirect(url_for('upload_page'))
-        
-        # Save to database
+        # Save image record immediately with processing status
         user_id = session['user_id']
         image_record = Image(
             user_id=user_id,
             original_image=image_data,
-            transition1=transition1_data,
-            transition2=transition2_data,
-            final_dog=final_dog_data,
-            breed=breed
+            breed=breed,
+            status='processing'
         )
         
         db.session.add(image_record)
         db.session.commit()
+        image_id = image_record.id
         
-        logger.info(f"Successfully generated transformation for breed: {breed}")
-        flash(f'Successfully generated {breed} transformation!', 'success')
+        logger.info(f"Created image record {image_id} with status 'processing'")
+        
+        # Start background thread to generate images
+        def generate_images_background(image_id, image_data, breed):
+            """Generate images in background thread."""
+            with app.app_context():
+                try:
+                    logger.info(f"Background thread: Starting image generation for image {image_id}")
+                    
+                    # Generate transition images
+                    logger.info(f"Background: Generating transition image 1 for image {image_id}")
+                    transition1_data = generate_transition_image(image_data, breed, 1)
+                    logger.info(f"Background: Transition image 1 {'completed' if transition1_data else 'failed'} for image {image_id}")
+                    
+                    logger.info(f"Background: Generating transition image 2 for image {image_id}")
+                    transition2_data = generate_transition_image(image_data, breed, 2)
+                    logger.info(f"Background: Transition image 2 {'completed' if transition2_data else 'failed'} for image {image_id}")
+                    
+                    logger.info(f"Background: Generating final dog image for image {image_id}")
+                    final_dog_data = generate_final_dog_image(image_data, breed)
+                    logger.info(f"Background: Final dog image {'completed' if final_dog_data else 'failed'} for image {image_id}")
+                    
+                    # Update database
+                    image_record = Image.query.get(image_id)
+                    if image_record and all([transition1_data, transition2_data, final_dog_data]):
+                        image_record.transition1 = transition1_data
+                        image_record.transition2 = transition2_data
+                        image_record.final_dog = final_dog_data
+                        image_record.status = 'completed'
+                        db.session.commit()
+                        logger.info(f"Background: Successfully completed image generation for image {image_id}")
+                    else:
+                        if image_record:
+                            image_record.status = 'failed'
+                            db.session.commit()
+                        logger.error(f"Background: Failed to generate all images for image {image_id}")
+                        
+                except Exception as e:
+                    logger.error(f"Background: Exception in image generation for image {image_id}: {type(e).__name__}: {str(e)}", exc_info=True)
+                    try:
+                        image_record = Image.query.get(image_id)
+                        if image_record:
+                            image_record.status = 'failed'
+                            db.session.commit()
+                    except:
+                        pass
+        
+        # Start background thread
+        thread = threading.Thread(target=generate_images_background, args=(image_id, image_data, breed))
+        thread.daemon = True
+        thread.start()
+        
+        logger.info(f"Started background thread for image {image_id}, returning response to user")
+        flash('Image uploaded! Generating transformations in the background. Check your gallery in a minute.', 'info')
         return redirect(url_for('gallery'))
         
     except Exception as e:
@@ -278,6 +310,10 @@ def serve_image(image_id, image_type):
     else:
         flash('Invalid image type.', 'error')
         return redirect(url_for('gallery'))
+    
+    # If image is still processing, return 204 No Content
+    if image_data is None:
+        return '', 204
     
     return send_file(
         BytesIO(image_data),

@@ -12,10 +12,15 @@
     {% if images %}
         <div class="gallery-grid">
             {% for image in images %}
-            <div class="gallery-item">
+            <div class="gallery-item" data-status="{{ image.status }}">
                 <div class="gallery-item-header">
                     <h3>{{ image.breed }}</h3>
                     <span class="gallery-date">{{ image.created_at.strftime('%B %d, %Y') }}</span>
+                    {% if image.status == 'processing' %}
+                        <span class="status-badge processing">Processing...</span>
+                    {% elif image.status == 'failed' %}
+                        <span class="status-badge failed">Failed</span>
+                    {% endif %}
                 </div>
                 <div class="transformation-sequence" data-image-id="{{ image.id }}">
                     <div class="sequence-item">
@@ -25,18 +30,30 @@
                     </div>
                     <div class="sequence-item">
                         <h4>Transition 1</h4>
-                        <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition1') }}" 
-                             alt="Transition 1" class="transformation-image" loading="lazy">
+                        {% if image.status == 'processing' or not image.transition1 %}
+                            <div class="placeholder">Generating...</div>
+                        {% else %}
+                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition1') }}" 
+                                 alt="Transition 1" class="transformation-image" loading="lazy">
+                        {% endif %}
                     </div>
                     <div class="sequence-item">
                         <h4>Transition 2</h4>
-                        <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition2') }}" 
-                             alt="Transition 2" class="transformation-image" loading="lazy">
+                        {% if image.status == 'processing' or not image.transition2 %}
+                            <div class="placeholder">Generating...</div>
+                        {% else %}
+                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition2') }}" 
+                                 alt="Transition 2" class="transformation-image" loading="lazy">
+                        {% endif %}
                     </div>
                     <div class="sequence-item">
                         <h4>Final</h4>
-                        <img src="{{ url_for('serve_image', image_id=image.id, image_type='final') }}" 
-                             alt="Final" class="transformation-image" loading="lazy">
+                        {% if image.status == 'processing' or not image.final_dog %}
+                            <div class="placeholder">Generating...</div>
+                        {% else %}
+                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='final') }}" 
+                                 alt="Final" class="transformation-image" loading="lazy">
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -53,6 +70,15 @@
 
 {% block scripts %}
 <script>
+    // Auto-refresh gallery if any images are processing
+    const processingItems = document.querySelectorAll('[data-status="processing"]');
+    if (processingItems.length > 0) {
+        // Refresh page every 10 seconds while images are processing
+        setTimeout(() => {
+            window.location.reload();
+        }, 10000);
+    }
+    
     // Use Web Workers to load images in parallel for better performance
     if (window.Worker) {
         const images = document.querySelectorAll('.transformation-image');
