@@ -13,7 +13,9 @@ class Config:
     
     # Domain configuration
     DOMAIN = os.getenv('DOMAIN', 'shaggydog.lol')
-    SERVER_NAME = os.getenv('SERVER_NAME') or None  # Set to 'shaggydog.lol' for production (or leave empty for auto-detect)
+    # Don't set SERVER_NAME - Flask will auto-detect from request headers when behind a proxy
+    # Setting SERVER_NAME restricts Flask to only accept requests for that hostname
+    SERVER_NAME = None
     PREFERRED_URL_SCHEME = os.getenv('PREFERRED_URL_SCHEME', 'https')
     
     # Environment
