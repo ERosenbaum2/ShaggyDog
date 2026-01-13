@@ -11,14 +11,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     });
 
-    // File input label click handler
+    // File input label click handler - prevent double-triggering
     const fileInputs = document.querySelectorAll('input[type="file"]');
     fileInputs.forEach(input => {
         const label = input.closest('.form-group')?.querySelector('.file-label');
         if (label) {
-            label.addEventListener('click', function(e) {
-                if (e.target !== input) {
-                    input.click();
+            // Use mousedown instead of click to prevent double-triggering
+            label.addEventListener('mousedown', function(e) {
+                // Only trigger if clicking on the label itself, not the input
+                if (e.target === label || e.target.classList.contains('file-button') || e.target.classList.contains('file-name')) {
+                    e.preventDefault();
+                    // Small delay to ensure the click event doesn't also fire
+                    setTimeout(() => {
+                        input.click();
+                    }, 10);
                 }
             });
         }

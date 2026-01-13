@@ -14,7 +14,7 @@
                     <span class="file-button">Choose Image</span>
                     <span class="file-name" id="fileName">No file selected</span>
                 </label>
-                <input type="file" id="image" name="image" accept="image/*" required style="display: none;">
+                <input type="file" id="image" name="image" accept="image/*" required style="display: none;" onclick="event.stopPropagation();">
             </div>
             
             <div id="imagePreview" class="image-preview" style="display: none;">
