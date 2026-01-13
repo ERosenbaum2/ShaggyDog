@@ -62,38 +62,41 @@ def detect_breed(image_file):
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert at analyzing human photos and matching them to dog breeds based on physical characteristics. This is for a fun, creative digital art project. Always provide a detailed breed suggestion based on observable features."
+                    "content": "You are an expert visual analyst specializing in matching human portraits to dog breeds for creative digital art projects. You analyze photos objectively based on observable physical characteristics. Your task is to examine the provided image and suggest the most appropriate dog breed match based on facial features, build, coloring, and other visible traits. This is for artistic transformation purposes."
                 },
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": """Analyze this portrait photo in detail and determine which dog breed would be the best artistic match based on multiple physical characteristics:
+                            "text": """You are analyzing a portrait photograph. Look carefully at the image and identify the following observable physical characteristics:
 
-PHYSICAL FEATURES TO ANALYZE:
-1. Face shape (round, oval, square, long, heart-shaped)
-2. Eye shape and size (large, small, almond, round, wide-set, close-set)
-3. Eye color (if visible)
-4. Skin/hair color and tone
-5. Hair texture and style (if visible: curly, straight, wavy, short, long)
-6. Facial structure (cheekbones, jawline, nose shape)
-7. Body build/physique (if visible: athletic, stocky, lean, petite, large)
-8. Overall expression and energy (friendly, serious, playful, calm)
-9. Proportions (head size relative to body if visible)
+REQUIRED ANALYSIS - Examine the image and note:
+1. Face shape: (round, oval, square, long, heart-shaped, angular)
+2. Eye characteristics: (shape, size, spacing - large/small, almond/round, wide-set/close-set)
+3. Skin tone and coloring: (light, medium, dark, and any undertones visible)
+4. Hair characteristics: (if visible: color, texture - curly/straight/wavy, length, style)
+5. Facial structure: (cheekbone prominence, jawline shape, nose shape and size)
+6. Build/physique: (if visible: athletic, stocky, lean, petite, large-framed)
+7. Expression and energy: (friendly, serious, playful, calm, intense)
+8. Overall proportions: (head size relative to visible body, facial feature proportions)
 
-Based on ALL these characteristics, determine which dog breed would be the most accurate artistic match. Consider:
-- Facial structure similarities
-- Build and physique similarities  
-- Color and texture matches
-- Overall energy and expression
-- Proportional similarities
+Based on these SPECIFIC characteristics you observe in THIS image, determine which dog breed would be the most accurate artistic match. Consider:
+- Which breed has similar facial structure?
+- Which breed has similar build/physique?
+- Which breed has similar coloring (coat color matching skin/hair tone)?
+- Which breed has similar energy/expression?
+- Which breed has similar proportional features?
 
-Respond ONLY in this exact format:
-BREED: [specific dog breed name]
-REASONING: [2-3 sentences explaining the match based on the specific physical characteristics you observed, such as face shape, build, coloring, etc.]
+IMPORTANT: You MUST analyze the actual image provided. Look at the specific person in the photo and match them to an appropriate dog breed based on what you actually see.
 
-This is for a creative art project, so be specific and detailed in your analysis."""
+Respond in EXACTLY this format (no other text):
+BREED: [specific dog breed name - be precise, e.g., "Rottweiler" not just "dog"]
+REASONING: [2-3 sentences describing the specific physical characteristics you observed in the image that led to this breed match, including face shape, build, coloring, etc.]
+
+Example format:
+BREED: Rottweiler
+REASONING: The person has a strong, square jawline and athletic build similar to a Rottweiler. The darker skin tone matches the Rottweiler's black and tan coloring. The facial structure with prominent cheekbones and determined expression aligns with the breed's characteristic appearance."""
                         },
                         {
                             "type": "image_url",
@@ -109,41 +112,66 @@ This is for a creative art project, so be specific and detailed in your analysis
         )
         
         result = response.choices[0].message.content
+        logger.info(f"OpenAI breed detection raw response: {result[:500]}")  # Log first 500 chars
         
         # Check if OpenAI refused the request
-        if not result or "sorry" in result.lower() or "can't" in result.lower() or "cannot" in result.lower():
-            logger.warning(f"OpenAI content policy refusal detected: {result}")
-            # Fallback to a default breed suggestion
-            return "Golden Retriever", "Based on general facial features, a friendly Golden Retriever would be a good match."
+        refusal_keywords = ["sorry", "can't", "cannot", "unable", "not able", "i'm not", "i cannot", "i can't"]
+        is_refusal = not result or any(keyword in result.lower() for keyword in refusal_keywords)
+        
+        if is_refusal:
+            logger.error(f"OpenAI content policy refusal detected. Full response: {result}")
+            # Don't use fallback - return error so user knows something went wrong
+            return None, f"Content policy restriction: {result[:100]}"
         
         lines = result.split('\n')
         
         breed = None
         reasoning = ""
         
+        # Parse the response
         for line in lines:
+            line = line.strip()
             if line.startswith('BREED:'):
                 breed = line.replace('BREED:', '').strip()
+                logger.info(f"Extracted breed: {breed}")
             elif line.startswith('REASONING:'):
                 reasoning = line.replace('REASONING:', '').strip()
+                logger.info(f"Extracted reasoning: {reasoning[:200]}")
         
+        # If we didn't find BREED: line, try to extract from response
         if not breed:
-            # Fallback: try to extract breed from the response
+            logger.warning("BREED: line not found in response, attempting extraction")
             # Look for common breed names in the response
-            common_breeds = ['Golden Retriever', 'Labrador', 'German Shepherd', 'Beagle', 'Bulldog', 'Poodle', 'Husky', 'Border Collie', 'Corgi', 'Shih Tzu', 'Pug', 'Chihuahua', 'Dachshund', 'Siberian Husky', 'Australian Shepherd']
+            common_breeds = [
+                'Golden Retriever', 'Labrador Retriever', 'Labrador', 'German Shepherd', 
+                'Beagle', 'Bulldog', 'French Bulldog', 'Poodle', 'Husky', 'Siberian Husky',
+                'Border Collie', 'Corgi', 'Pembroke Welsh Corgi', 'Shih Tzu', 'Pug', 
+                'Chihuahua', 'Dachshund', 'Australian Shepherd', 'Rottweiler', 'Doberman',
+                'Boxer', 'Great Dane', 'Mastiff', 'Saint Bernard', 'Bernese Mountain Dog',
+                'Shiba Inu', 'Akita', 'Chow Chow', 'Dalmatian', 'Weimaraner'
+            ]
             result_lower = result.lower()
             for common_breed in common_breeds:
                 if common_breed.lower() in result_lower:
                     breed = common_breed
-                    reasoning = result[:200]  # First 200 chars as reasoning
+                    # Try to extract reasoning from nearby text
+                    breed_index = result_lower.find(common_breed.lower())
+                    reasoning = result[max(0, breed_index-50):breed_index+200].strip()
+                    logger.info(f"Found breed '{breed}' in response text")
                     break
-            
-            if not breed:
-                # Last resort: use first line or default
-                breed = result.split('\n')[0].strip()[:50] or "Golden Retriever"
-                reasoning = result[:200] if result else "General facial similarity"
         
-        return breed, reasoning
+        # Final validation
+        if not breed or len(breed) < 2:
+            logger.error(f"Failed to extract valid breed from response: {result[:300]}")
+            return None, f"Could not determine breed from analysis. Response: {result[:200]}"
+        
+        # Validate breed name (should be reasonable length and not contain refusal text)
+        if len(breed) > 50 or any(keyword in breed.lower() for keyword in refusal_keywords):
+            logger.error(f"Invalid breed extracted: {breed}")
+            return None, "Invalid breed detected in response"
+        
+        logger.info(f"Successfully detected breed: {breed} with reasoning: {reasoning[:100]}")
+        return breed, reasoning or f"Based on facial features and physical characteristics observed in the image."
         
     except Exception as e:
         logger.error(f"Error in detect_breed: {type(e).__name__}: {str(e)}", exc_info=True)
