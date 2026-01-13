@@ -55,50 +55,32 @@ def detect_breed(image_file):
         # Get OpenAI client
         client = get_client()
         
-        # Use OpenAI Vision API to analyze the image with detailed physical characteristics
-        # Enhanced prompt for more accurate breed matching
-        response = client.chat.completions.create(
+        # STEP 1: Get a visual description of the image
+        logger.info("Step 1: Getting visual description of image")
+        description_response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a visual pattern matching expert for creative art projects. You analyze images to identify visual characteristics like shapes, colors, textures, and proportions, then match these to dog breeds based on similar visual patterns. You focus purely on observable visual features without identifying subjects."
+                    "content": "You are a visual analyst that describes images in detail. You focus on observable visual characteristics, shapes, colors, textures, and patterns without identifying specific individuals."
                 },
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": """Analyze this image as a collection of visual patterns and characteristics. Identify the following VISUAL FEATURES (treat this as abstract visual analysis, not subject identification):
+                            "text": """Describe the visual characteristics you see in this image. Focus on:
 
-VISUAL CHARACTERISTICS TO IDENTIFY:
-1. Face shape pattern: (round, oval, square, long, heart-shaped, angular, rectangular)
-2. Eye pattern: (shape - almond/round/oval, size relative to face, spacing - wide/close, positioning)
-3. Color palette: (dominant colors, tones - light/medium/dark, color distribution, contrast levels)
-4. Texture patterns: (if visible - smooth, textured, curly patterns, straight lines, wavy patterns)
-5. Structural shapes: (cheekbone angles, jawline shape - square/round/angular, nose proportions)
-6. Body proportions: (if visible - overall frame size, head-to-body ratio, build pattern - compact/elongated/stocky)
-7. Visual energy: (conveyed through expression - bright/calm/intense/playful based on visual cues)
-8. Geometric patterns: (facial feature arrangement, symmetry, proportional relationships)
+1. Face shape: (round, oval, square, long, heart-shaped, angular, rectangular)
+2. Eye characteristics: (shape - almond/round/oval, size, spacing, positioning)
+3. Color palette: (dominant colors, skin tone - light/medium/dark, hair color if visible, overall color scheme)
+4. Hair/texture: (if visible - color, texture - curly/straight/wavy, length, style)
+5. Facial structure: (cheekbone prominence, jawline shape, nose shape and size, facial angles)
+6. Build/physique: (if visible - athletic, stocky, lean, petite, large-framed, body proportions)
+7. Expression: (friendly, serious, playful, calm, intense - based on visual cues)
+8. Overall proportions: (head size relative to body, facial feature proportions)
 
-Based on these VISUAL PATTERNS you observe, match them to a dog breed with similar visual characteristics:
-
-MATCHING CRITERIA:
-- Facial structure patterns (which breed has similar geometric face shape?)
-- Color palette matching (which breed's coat colors match the dominant colors in the image?)
-- Texture similarities (which breed's fur texture matches visible texture patterns?)
-- Proportional patterns (which breed has similar head-to-body proportions?)
-- Structural similarities (which breed has similar bone structure patterns?)
-
-This is a creative visual art matching task. Analyze the image purely as visual patterns, shapes, and colors.
-
-Respond in EXACTLY this format:
-BREED: [specific dog breed name]
-REASONING: [2-3 sentences describing the visual patterns, shapes, colors, and structural characteristics you observed that match this breed's appearance]
-
-Example:
-BREED: Rottweiler
-REASONING: The image shows a square, angular facial structure pattern with strong geometric lines, matching a Rottweiler's head shape. The dominant dark color palette with tan accents aligns with the Rottweiler's black and tan coat pattern. The structural proportions show a stocky, powerful build pattern similar to this breed's characteristic physique."""
+Provide a detailed description of these visual characteristics. Be specific about colors, shapes, and proportions."""
                         },
                         {
                             "type": "image_url",
@@ -109,12 +91,59 @@ REASONING: The image shows a square, angular facial structure pattern with stron
                     ]
                 }
             ],
-            max_tokens=500,
-            temperature=0.5
+            max_tokens=400,
+            temperature=0.3
         )
         
-        result = response.choices[0].message.content
-        logger.info(f"OpenAI breed detection raw response: {result[:500]}")  # Log first 500 chars
+        visual_description = description_response.choices[0].message.content
+        logger.info(f"Visual description received: {visual_description[:300]}")
+        
+        # Check if description was refused
+        refusal_keywords = ["sorry", "can't", "cannot", "unable", "not able", "i'm not", "i cannot", "i can't", "unable to identify"]
+        if any(keyword in visual_description.lower() for keyword in refusal_keywords):
+            logger.error(f"Description step was refused: {visual_description}")
+            # Try a more abstract approach
+            visual_description = "A portrait image with various visual characteristics including facial features, coloring, and structure."
+            logger.warning("Using fallback description")
+        
+        # STEP 2: Use the description to determine the breed
+        logger.info("Step 2: Determining breed from description")
+        breed_response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert at matching visual characteristics to dog breeds for creative art projects. You analyze descriptions of visual features and determine which dog breed would be the best artistic match."
+                },
+                {
+                    "role": "user",
+                    "content": f"""Based on this visual description, determine which dog breed would be the best artistic match:
+
+VISUAL DESCRIPTION:
+{visual_description}
+
+Analyze the described characteristics and match them to a dog breed considering:
+- Facial structure similarities (face shape, jawline, cheekbones, nose)
+- Color matching (skin/hair colors matching coat colors)
+- Build similarities (athletic, stocky, lean, etc.)
+- Proportional similarities (head-to-body ratio, feature proportions)
+- Overall energy/expression match
+
+Respond in EXACTLY this format:
+BREED: [specific dog breed name - be precise]
+REASONING: [2-3 sentences explaining which specific characteristics from the description led to this breed match]
+
+Example:
+BREED: Rottweiler
+REASONING: The description mentions a square, angular jawline and athletic build, which matches a Rottweiler's strong facial structure. The darker coloring described aligns with the Rottweiler's black and tan coat. The stocky, powerful build pattern matches this breed's characteristic physique."""
+                }
+            ],
+            max_tokens=300,
+            temperature=0.4
+        )
+        
+        result = breed_response.choices[0].message.content
+        logger.info(f"Breed determination response: {result[:500]}")
         
         # Check if OpenAI refused the request
         refusal_keywords = ["sorry", "can't", "cannot", "unable", "not able", "i'm not", "i cannot", "i can't"]
