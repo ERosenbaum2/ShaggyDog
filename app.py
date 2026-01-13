@@ -156,30 +156,43 @@ def upload_page():
 @login_required
 def upload():
     """Process image upload and generate transformations."""
+    logger.info("UPLOAD route called (POST)")
+    logger.info(f"Request files: {list(request.files.keys())}")
+    
     if 'image' not in request.files:
+        logger.warning("No image file in request")
         flash('No image file provided.', 'error')
         return redirect(url_for('upload_page'))
     
     file = request.files['image']
     if file.filename == '':
+        logger.warning("Empty filename in image upload")
         flash('No image file selected.', 'error')
         return redirect(url_for('upload_page'))
+    
+    logger.info(f"Processing image upload: {file.filename}")
     
     # Validate file type
     allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
     if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+        logger.warning(f"Invalid file type: {file.filename}")
         flash('Invalid file type. Please upload an image (PNG, JPG, JPEG, GIF, or WEBP).', 'error')
         return redirect(url_for('upload_page'))
     
     try:
         # Read image data
+        logger.info("Reading image data")
         image_data = file.read()
+        logger.info(f"Image data size: {len(image_data)} bytes")
         
         # Detect breed
+        logger.info("Starting breed detection")
         file.seek(0)  # Reset file pointer
         breed, reasoning = detect_breed(file)
+        logger.info(f"Breed detection result: breed={breed}, reasoning={reasoning[:100] if reasoning else 'None'}")
         
         if not breed:
+            logger.error(f"Breed detection failed: {reasoning}")
             flash(f'Error detecting breed: {reasoning}', 'error')
             return redirect(url_for('upload_page'))
         
@@ -208,10 +221,12 @@ def upload():
         db.session.add(image_record)
         db.session.commit()
         
+        logger.info(f"Successfully generated transformation for breed: {breed}")
         flash(f'Successfully generated {breed} transformation!', 'success')
         return redirect(url_for('gallery'))
         
     except Exception as e:
+        logger.error(f"EXCEPTION in upload route: {type(e).__name__}: {str(e)}", exc_info=True)
         db.session.rollback()
         flash(f'Error processing image: {str(e)}', 'error')
         return redirect(url_for('upload_page'))

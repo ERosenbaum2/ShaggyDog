@@ -1,14 +1,35 @@
 import openai
 import base64
+import os
+import logging
 from config import Config
 from io import BytesIO
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 def get_client():
     """Get OpenAI client with API key validation."""
     if not Config.OPENAI_API_KEY or Config.OPENAI_API_KEY == 'your_api_key_here':
         raise ValueError("OpenAI API key not set. Please set OPENAI_API_KEY in .env file.")
-    return openai.OpenAI(api_key=Config.OPENAI_API_KEY)
+    
+    try:
+        # Check for proxy environment variables that might cause issues
+        proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
+        has_proxy = any(os.getenv(var) for var in proxy_vars)
+        if has_proxy:
+            logger.warning(f"Proxy environment variables detected: {[var for var in proxy_vars if os.getenv(var)]}")
+        
+        # Create client with just the API key
+        # Newer OpenAI versions handle proxies automatically via environment variables
+        client = openai.OpenAI(api_key=Config.OPENAI_API_KEY)
+        logger.info("OpenAI client created successfully")
+        return client
+    except TypeError as e:
+        # If there's a TypeError about unexpected arguments, log it
+        logger.error(f"Error creating OpenAI client: {str(e)}")
+        logger.error(f"OpenAI version: {openai.__version__}")
+        raise
 
 def detect_breed(image_file):
     """
@@ -77,6 +98,7 @@ def detect_breed(image_file):
         return breed, reasoning
         
     except Exception as e:
+        logger.error(f"Error in detect_breed: {type(e).__name__}: {str(e)}", exc_info=True)
         return None, f"Error detecting breed: {str(e)}"
 
 def generate_transition_image(original_image_data, breed, transition_number, total_transitions=2):
