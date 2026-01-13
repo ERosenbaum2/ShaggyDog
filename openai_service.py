@@ -139,11 +139,15 @@ def generate_transition_image(original_image_data, breed, transition_number, tot
         bytes: Generated image data or None if error
     """
     try:
+        logger.info(f"Starting transition image {transition_number} generation for breed: {breed}")
+        
         # Convert image to base64
         if isinstance(original_image_data, bytes):
             image_base64 = base64.b64encode(original_image_data).decode('utf-8')
         else:
             image_base64 = base64.b64encode(original_image_data.read()).decode('utf-8')
+        
+        logger.info(f"Image converted to base64, length: {len(image_base64)}")
         
         # Create prompt based on transition number
         if transition_number == 1:
@@ -153,10 +157,13 @@ def generate_transition_image(original_image_data, breed, transition_number, tot
         else:
             prompt = f"A photorealistic image showing a gradual transformation from a human face to a {breed} dog. This is transition {transition_number} of {total_transitions}."
         
+        logger.info(f"Prompt created for transition {transition_number}, calling DALL-E")
+        
         # Get OpenAI client
         client = get_client()
         
         # Use DALL-E to generate the image
+        logger.info(f"Calling DALL-E API for transition {transition_number}")
         response = client.images.generate(
             model="dall-e-3",
             prompt=prompt,
@@ -165,17 +172,22 @@ def generate_transition_image(original_image_data, breed, transition_number, tot
             n=1
         )
         
+        logger.info(f"DALL-E API call completed for transition {transition_number}")
+        
         # Download the generated image
         image_url = response.data[0].url
+        logger.info(f"Image URL received: {image_url[:50]}...")
         
         import requests
-        img_response = requests.get(image_url)
+        logger.info(f"Downloading image from URL for transition {transition_number}")
+        img_response = requests.get(image_url, timeout=60)
         img_response.raise_for_status()
         
+        logger.info(f"Image downloaded successfully for transition {transition_number}, size: {len(img_response.content)} bytes")
         return img_response.content
         
     except Exception as e:
-        print(f"Error generating transition image {transition_number}: {str(e)}")
+        logger.error(f"Error generating transition image {transition_number}: {type(e).__name__}: {str(e)}", exc_info=True)
         return None
 
 def generate_final_dog_image(original_image_data, breed):
@@ -190,12 +202,17 @@ def generate_final_dog_image(original_image_data, breed):
         bytes: Generated image data or None if error
     """
     try:
+        logger.info(f"Starting final dog image generation for breed: {breed}")
+        
         prompt = f"A photorealistic portrait of a {breed} dog that closely resembles the facial features and expression of the human in the reference image. The dog should have the same general facial structure, eye shape, and expression as the human, but fully transformed into a {breed}. High quality, detailed, professional photography style."
+        
+        logger.info("Prompt created for final image, calling DALL-E")
         
         # Get OpenAI client
         client = get_client()
         
         # Use DALL-E to generate the final image
+        logger.info("Calling DALL-E API for final image")
         response = client.images.generate(
             model="dall-e-3",
             prompt=prompt,
@@ -204,15 +221,20 @@ def generate_final_dog_image(original_image_data, breed):
             n=1
         )
         
+        logger.info("DALL-E API call completed for final image")
+        
         # Download the generated image
         image_url = response.data[0].url
+        logger.info(f"Image URL received: {image_url[:50]}...")
         
         import requests
-        img_response = requests.get(image_url)
+        logger.info("Downloading final image from URL")
+        img_response = requests.get(image_url, timeout=60)
         img_response.raise_for_status()
         
+        logger.info(f"Final image downloaded successfully, size: {len(img_response.content)} bytes")
         return img_response.content
         
     except Exception as e:
-        print(f"Error generating final dog image: {str(e)}")
+        logger.error(f"Error generating final dog image: {type(e).__name__}: {str(e)}", exc_info=True)
         return None

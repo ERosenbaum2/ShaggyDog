@@ -80,6 +80,12 @@ def index():
     logger.info("User is not logged in, redirecting to login")
     return redirect(url_for('login'))
 
+@app.route('/favicon.ico')
+@app.route('/favicon.png')
+def favicon():
+    """Handle favicon requests to prevent 404 errors."""
+    return '', 204  # No content
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     """User registration."""
@@ -197,11 +203,20 @@ def upload():
             return redirect(url_for('upload_page'))
         
         # Generate transition images
+        logger.info("Starting image generation process")
         flash('Generating images... This may take a minute.', 'info')
         
+        logger.info("Generating transition image 1")
         transition1_data = generate_transition_image(image_data, breed, 1)
+        logger.info(f"Transition image 1 {'completed' if transition1_data else 'failed'}")
+        
+        logger.info("Generating transition image 2")
         transition2_data = generate_transition_image(image_data, breed, 2)
+        logger.info(f"Transition image 2 {'completed' if transition2_data else 'failed'}")
+        
+        logger.info("Generating final dog image")
         final_dog_data = generate_final_dog_image(image_data, breed)
+        logger.info(f"Final dog image {'completed' if final_dog_data else 'failed'}")
         
         if not all([transition1_data, transition2_data, final_dog_data]):
             flash('Error generating images. Please try again.', 'error')
