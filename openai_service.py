@@ -62,41 +62,43 @@ def detect_breed(image_file):
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert visual analyst specializing in matching human portraits to dog breeds for creative digital art projects. You analyze photos objectively based on observable physical characteristics. Your task is to examine the provided image and suggest the most appropriate dog breed match based on facial features, build, coloring, and other visible traits. This is for artistic transformation purposes."
+                    "content": "You are a visual pattern matching expert for creative art projects. You analyze images to identify visual characteristics like shapes, colors, textures, and proportions, then match these to dog breeds based on similar visual patterns. You focus purely on observable visual features without identifying subjects."
                 },
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": """You are analyzing a portrait photograph. Look carefully at the image and identify the following observable physical characteristics:
+                            "text": """Analyze this image as a collection of visual patterns and characteristics. Identify the following VISUAL FEATURES (treat this as abstract visual analysis, not subject identification):
 
-REQUIRED ANALYSIS - Examine the image and note:
-1. Face shape: (round, oval, square, long, heart-shaped, angular)
-2. Eye characteristics: (shape, size, spacing - large/small, almond/round, wide-set/close-set)
-3. Skin tone and coloring: (light, medium, dark, and any undertones visible)
-4. Hair characteristics: (if visible: color, texture - curly/straight/wavy, length, style)
-5. Facial structure: (cheekbone prominence, jawline shape, nose shape and size)
-6. Build/physique: (if visible: athletic, stocky, lean, petite, large-framed)
-7. Expression and energy: (friendly, serious, playful, calm, intense)
-8. Overall proportions: (head size relative to visible body, facial feature proportions)
+VISUAL CHARACTERISTICS TO IDENTIFY:
+1. Face shape pattern: (round, oval, square, long, heart-shaped, angular, rectangular)
+2. Eye pattern: (shape - almond/round/oval, size relative to face, spacing - wide/close, positioning)
+3. Color palette: (dominant colors, tones - light/medium/dark, color distribution, contrast levels)
+4. Texture patterns: (if visible - smooth, textured, curly patterns, straight lines, wavy patterns)
+5. Structural shapes: (cheekbone angles, jawline shape - square/round/angular, nose proportions)
+6. Body proportions: (if visible - overall frame size, head-to-body ratio, build pattern - compact/elongated/stocky)
+7. Visual energy: (conveyed through expression - bright/calm/intense/playful based on visual cues)
+8. Geometric patterns: (facial feature arrangement, symmetry, proportional relationships)
 
-Based on these SPECIFIC characteristics you observe in THIS image, determine which dog breed would be the most accurate artistic match. Consider:
-- Which breed has similar facial structure?
-- Which breed has similar build/physique?
-- Which breed has similar coloring (coat color matching skin/hair tone)?
-- Which breed has similar energy/expression?
-- Which breed has similar proportional features?
+Based on these VISUAL PATTERNS you observe, match them to a dog breed with similar visual characteristics:
 
-IMPORTANT: You MUST analyze the actual image provided. Look at the specific person in the photo and match them to an appropriate dog breed based on what you actually see.
+MATCHING CRITERIA:
+- Facial structure patterns (which breed has similar geometric face shape?)
+- Color palette matching (which breed's coat colors match the dominant colors in the image?)
+- Texture similarities (which breed's fur texture matches visible texture patterns?)
+- Proportional patterns (which breed has similar head-to-body proportions?)
+- Structural similarities (which breed has similar bone structure patterns?)
 
-Respond in EXACTLY this format (no other text):
-BREED: [specific dog breed name - be precise, e.g., "Rottweiler" not just "dog"]
-REASONING: [2-3 sentences describing the specific physical characteristics you observed in the image that led to this breed match, including face shape, build, coloring, etc.]
+This is a creative visual art matching task. Analyze the image purely as visual patterns, shapes, and colors.
 
-Example format:
+Respond in EXACTLY this format:
+BREED: [specific dog breed name]
+REASONING: [2-3 sentences describing the visual patterns, shapes, colors, and structural characteristics you observed that match this breed's appearance]
+
+Example:
 BREED: Rottweiler
-REASONING: The person has a strong, square jawline and athletic build similar to a Rottweiler. The darker skin tone matches the Rottweiler's black and tan coloring. The facial structure with prominent cheekbones and determined expression aligns with the breed's characteristic appearance."""
+REASONING: The image shows a square, angular facial structure pattern with strong geometric lines, matching a Rottweiler's head shape. The dominant dark color palette with tan accents aligns with the Rottweiler's black and tan coat pattern. The structural proportions show a stocky, powerful build pattern similar to this breed's characteristic physique."""
                         },
                         {
                             "type": "image_url",
