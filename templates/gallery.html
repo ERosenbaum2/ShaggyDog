@@ -26,7 +26,7 @@
                     <div class="sequence-item">
                         <h4>Original</h4>
                         {% if image.original_image %}
-                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='original') }}" 
+                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='original', v=image.id) }}?t={{ image.created_at.timestamp() }}" 
                                  alt="Original" class="transformation-image" loading="lazy" data-ready="true">
                         {% else %}
                             <div class="placeholder">Loading...</div>
@@ -37,7 +37,7 @@
                         {% if image.status == 'processing' or not image.transition1 %}
                             <div class="placeholder">Generating...</div>
                         {% else %}
-                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition1') }}" 
+                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition1') }}?t={{ image.created_at.timestamp() }}" 
                                  alt="Transition 1" class="transformation-image" loading="lazy" data-ready="true">
                         {% endif %}
                     </div>
@@ -46,7 +46,7 @@
                         {% if image.status == 'processing' or not image.transition2 %}
                             <div class="placeholder">Generating...</div>
                         {% else %}
-                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition2') }}" 
+                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='transition2') }}?t={{ image.created_at.timestamp() }}" 
                                  alt="Transition 2" class="transformation-image" loading="lazy" data-ready="true">
                         {% endif %}
                     </div>
@@ -55,7 +55,7 @@
                         {% if image.status == 'processing' or not image.final_dog %}
                             <div class="placeholder">Generating...</div>
                         {% else %}
-                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='final') }}" 
+                            <img src="{{ url_for('serve_image', image_id=image.id, image_type='final') }}?t={{ image.created_at.timestamp() }}" 
                                  alt="Final" class="transformation-image" loading="lazy" data-ready="true">
                         {% endif %}
                     </div>

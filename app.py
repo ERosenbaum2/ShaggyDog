@@ -295,12 +295,15 @@ def serve_image(image_id, image_type):
     user_id = session['user_id']
     image_record = Image.query.filter_by(id=image_id, user_id=user_id).first_or_404()
     
+    logger.info(f"Serving image: id={image_id}, type={image_type}, status={image_record.status}, created_at={image_record.created_at}")
+    
     # Determine which image to serve
     image_data = None
     mimetype = 'image/jpeg'
     
     if image_type == 'original':
         image_data = image_record.original_image
+        logger.info(f"Original image data size: {len(image_data) if image_data else 0} bytes")
     elif image_type == 'transition1':
         image_data = image_record.transition1
     elif image_type == 'transition2':
@@ -315,11 +318,24 @@ def serve_image(image_id, image_type):
     if image_data is None:
         return '', 204
     
-    return send_file(
+    response = send_file(
         BytesIO(image_data),
         mimetype=mimetype,
         as_attachment=False
     )
+    
+    # Add cache control headers to prevent stale images
+    # Use cache-busting for processing images, normal cache for completed ones
+    if image_record.status == 'processing':
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    else:
+        # For completed images, allow caching but with ETag for validation
+        response.headers['Cache-Control'] = 'public, max-age=3600'
+        response.headers['ETag'] = f'"{image_record.id}-{image_record.created_at.timestamp()}"'
+    
+    return response
 
 # Add error handler for logging
 @app.errorhandler(Exception)
