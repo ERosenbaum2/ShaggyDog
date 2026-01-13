@@ -180,10 +180,10 @@ def upload():
     logger.info(f"Processing image upload: {file.filename}")
     
     # Validate file type
-    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'jfif', 'bmp', 'tiff', 'tif', 'ico', 'svg'}
     if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
         logger.warning(f"Invalid file type: {file.filename}")
-        flash('Invalid file type. Please upload an image (PNG, JPG, JPEG, GIF, or WEBP).', 'error')
+        flash('Invalid file type. Please upload an image (PNG, JPG, JPEG, GIF, WEBP, JFIF, BMP, TIFF, ICO, or SVG).', 'error')
         return redirect(url_for('upload_page'))
     
     try:
