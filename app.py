@@ -4,11 +4,32 @@ from models import db, User, Image
 from auth import register_user, verify_user, login_required, get_current_user
 from openai_service import detect_breed, generate_transition_image, generate_final_dog_image
 import os
+import logging
 from io import BytesIO
 from datetime import datetime
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Log configuration on startup
+logger.info("=" * 80)
+logger.info("APPLICATION STARTING")
+logger.info("=" * 80)
+logger.info(f"Flask app name: {app.name}")
+logger.info(f"Debug mode: {app.config.get('DEBUG')}")
+logger.info(f"Server name: {app.config.get('SERVER_NAME')}")
+logger.info(f"Preferred URL scheme: {app.config.get('PREFERRED_URL_SCHEME')}")
+logger.info(f"Domain: {app.config.get('DOMAIN')}")
+logger.info(f"Upload folder: {app.config.get('UPLOAD_FOLDER')}")
+logger.info(f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')}")
+logger.info("=" * 80)
 
 # Set preferred URL scheme for URL generation (for HTTPS in production)
 # This helps Flask generate correct URLs when behind a reverse proxy
@@ -25,12 +46,38 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Create database tables
 with app.app_context():
     db.create_all()
+    logger.info("Database tables created/verified")
+
+# Add request logging middleware
+@app.before_request
+def log_request_info():
+    """Log all incoming requests."""
+    logger.info("=" * 80)
+    logger.info(f"INCOMING REQUEST")
+    logger.info(f"Method: {request.method}")
+    logger.info(f"URL: {request.url}")
+    logger.info(f"Path: {request.path}")
+    logger.info(f"Host: {request.host}")
+    logger.info(f"Remote address: {request.remote_addr}")
+    logger.info(f"Headers: {dict(request.headers)}")
+    logger.info(f"Session: {dict(session)}")
+    logger.info("=" * 80)
+
+@app.after_request
+def log_response_info(response):
+    """Log all outgoing responses."""
+    logger.info(f"OUTGOING RESPONSE: Status {response.status_code}, Headers: {dict(response.headers)}")
+    return response
 
 @app.route('/')
 def index():
     """Home page - redirect to login or gallery."""
+    logger.info("INDEX route called")
+    logger.info(f"Session user_id: {session.get('user_id', 'None')}")
     if 'user_id' in session:
+        logger.info("User is logged in, redirecting to gallery")
         return redirect(url_for('gallery'))
+    logger.info("User is not logged in, redirecting to login")
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -71,6 +118,7 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """User login."""
+    logger.info(f"LOGIN route called with method: {request.method}")
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
@@ -172,8 +220,10 @@ def upload():
 @login_required
 def gallery():
     """User's image gallery."""
+    logger.info("GALLERY route called")
     user_id = session['user_id']
     images = Image.query.filter_by(user_id=user_id).order_by(Image.created_at.desc()).all()
+    logger.info(f"Found {len(images)} images for user {user_id}")
     return render_template('gallery.html', images=images)
 
 @app.route('/image/<int:image_id>/<image_type>')
@@ -205,14 +255,25 @@ def serve_image(image_id, image_type):
         as_attachment=False
     )
 
+# Add error handler for logging
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Log all exceptions."""
+    logger.error(f"EXCEPTION OCCURRED: {type(e).__name__}: {str(e)}", exc_info=True)
+    raise  # Re-raise to let Flask handle it
+
 if __name__ == '__main__':
     # Configure for production or development
     debug_mode = app.config.get('DEBUG', False)
     port = int(os.getenv('PORT', 5000))
     
+    logger.info(f"Starting Flask app in {'DEBUG' if debug_mode else 'PRODUCTION'} mode on port {port}")
+    
     # If SERVER_NAME is set, use it (for production with domain)
     if app.config.get('SERVER_NAME'):
+        logger.info(f"Using SERVER_NAME: {app.config.get('SERVER_NAME')}")
         app.run(debug=debug_mode, host='0.0.0.0', port=port)
     else:
         # Development mode - localhost
+        logger.info("No SERVER_NAME set, using default host")
         app.run(debug=debug_mode, host='0.0.0.0', port=port)
