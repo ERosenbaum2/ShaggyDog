@@ -55,21 +55,45 @@ def detect_breed(image_file):
         # Get OpenAI client
         client = get_client()
         
-        # Use OpenAI Vision API to analyze the image
-        # Use a more explicit prompt that avoids content policy issues
+        # Use OpenAI Vision API to analyze the image with detailed physical characteristics
+        # Enhanced prompt for more accurate breed matching
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant that analyzes photos to suggest which dog breed has similar facial features. This is for a fun, creative art project. Always provide a breed suggestion."
+                    "content": "You are an expert at analyzing human photos and matching them to dog breeds based on physical characteristics. This is for a fun, creative digital art project. Always provide a detailed breed suggestion based on observable features."
                 },
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": "Look at this portrait photo. Based on facial features like face shape, eye shape, and overall structure, which dog breed would be a good artistic match? This is for a creative digital art project. Respond ONLY in this exact format:\nBREED: [breed name]\nREASONING: [one sentence explanation]"
+                            "text": """Analyze this portrait photo in detail and determine which dog breed would be the best artistic match based on multiple physical characteristics:
+
+PHYSICAL FEATURES TO ANALYZE:
+1. Face shape (round, oval, square, long, heart-shaped)
+2. Eye shape and size (large, small, almond, round, wide-set, close-set)
+3. Eye color (if visible)
+4. Skin/hair color and tone
+5. Hair texture and style (if visible: curly, straight, wavy, short, long)
+6. Facial structure (cheekbones, jawline, nose shape)
+7. Body build/physique (if visible: athletic, stocky, lean, petite, large)
+8. Overall expression and energy (friendly, serious, playful, calm)
+9. Proportions (head size relative to body if visible)
+
+Based on ALL these characteristics, determine which dog breed would be the most accurate artistic match. Consider:
+- Facial structure similarities
+- Build and physique similarities  
+- Color and texture matches
+- Overall energy and expression
+- Proportional similarities
+
+Respond ONLY in this exact format:
+BREED: [specific dog breed name]
+REASONING: [2-3 sentences explaining the match based on the specific physical characteristics you observed, such as face shape, build, coloring, etc.]
+
+This is for a creative art project, so be specific and detailed in your analysis."""
                         },
                         {
                             "type": "image_url",
@@ -80,8 +104,8 @@ def detect_breed(image_file):
                     ]
                 }
             ],
-            max_tokens=300,
-            temperature=0.7
+            max_tokens=500,
+            temperature=0.5
         )
         
         result = response.choices[0].message.content
